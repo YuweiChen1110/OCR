@@ -4,7 +4,6 @@ import uuid
 import os
 import base64
 import cv2
-from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 # Global variable for caching the OCR model
 ocr_model_cache = None
@@ -16,10 +15,7 @@ def load_ocr_model():
     if ocr_model_cache is not None:
         return ocr_model_cache
     
-    ocr_model_cache = PaddleOCR(
-        use_angle_cls=True, 
-        lang='en'
-    )
+    ocr_model_cache = PaddleOCR(use_angle_cls=True, lang='en')
     return ocr_model_cache
 
 # Function to clear the OCR model cache
@@ -69,12 +65,6 @@ def merge_lines_to_paragraphs(text_info, line_spacing_threshold=10):
     
     return paragraphs
 
-# Function to convert paragraphs to markdown
-def convert_paragraphs_to_markdown(paragraphs, filename):
-    with open(filename, 'w', encoding='utf-8') as file:
-        for paragraph in paragraphs:
-            file.write(f"{paragraph}\n\n")
-
 # Function to create a download link
 def create_download_link(file_path, file_name):
     with open(file_path, "rb") as file:
@@ -82,7 +72,7 @@ def create_download_link(file_path, file_name):
         href = f'<a href="data:file/markdown;base64,{b64}" download="{file_name}">Download {file_name}</a>'
         return href
 
-# Streamlit web app
+# Streamlit Web App
 st.title('Paddle OCR Web App V1.0')
 st.write('This is a simple OCR web app using PaddleOCR with caching and improved code recognition.')
 
@@ -103,7 +93,11 @@ load_ocr_model()
 # File uploader
 uploaded_file = st.sidebar.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 if uploaded_file is not None:
-    with TemporaryDirectory() as temp_dir:
+    temp_dir = "/tmp/paddleocr_temp/"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        # Generate a unique filename to avoid conflicts
         bytes_data = uploaded_file.getvalue()
         unique_filename = os.path.join(temp_dir, str(uuid.uuid4()) + '.jpg')
         with open(unique_filename, 'wb') as f:
@@ -117,36 +111,37 @@ if uploaded_file is not None:
 
         # Run inference
         st.write("Recognizing text from image...")
-        try:
-            raw_results = inference(processed_image_path)
-            sorted_text_info = extract_sorted_text(raw_results)
-            paragraphs = merge_lines_to_paragraphs(sorted_text_info)
-            
-            with st.expander("Raw OCR results"):
-                for line in sorted_text_info:
-                    st.write(f"Detected text: {line[1]} (Confidence score: {line[2]})")
+        raw_results = inference(processed_image_path)
+        sorted_text_info = extract_sorted_text(raw_results)
+        paragraphs = merge_lines_to_paragraphs(sorted_text_info)
+        
+        with st.expander("Raw OCR results"):
+            for line in sorted_text_info:
+                st.write(f"Detected text: {line[1]} (Confidence score: {line[2]})")
 
-            st.write("Paragraphs:")
-            for paragraph in paragraphs:
-                st.write(paragraph)
+        st.write("Paragraphs:")
+        for paragraph in paragraphs:
+            st.write(paragraph)
 
-            # User input for file names in sidebar
-            paragraph_file_name = st.sidebar.text_input("Enter the file name for recognized text download:", "recognized_text.md")
-            
-            # Create download link in sidebar
-            if st.sidebar.button("Generate recognized text as markdown"):
-                with st.spinner('Processing...'):
-                    with NamedTemporaryFile(delete=False, suffix=".md", dir=temp_dir) as tmp_file:
-                        convert_paragraphs_to_markdown(paragraphs, tmp_file.name)
-                        tmp_file.flush()
-                        tmp_file.seek(0)
-                        href = create_download_link(tmp_file.name, paragraph_file_name)
-                        st.sidebar.markdown(href, unsafe_allow_html=True)
+        # Sidebar input for file name
+        paragraph_file_name = st.sidebar.text_input("Enter the file name for recognized text download:", "recognized_text.md")
+        
+        # Create download link in sidebar
+        if st.sidebar.button("Generate recognized text as markdown"):
+            with st.spinner('Processing...'):
+                markdown_file = os.path.join(temp_dir, paragraph_file_name)
+                # Directly create and write to the file
+                with open(markdown_file, 'w', encoding='utf-8') as tmp_file:
+                    tmp_file.write("\n\n".join(paragraphs))
+                # Create download link
+                href = create_download_link(markdown_file, paragraph_file_name)
+                st.sidebar.markdown(href, unsafe_allow_html=True)
 
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-        finally:
-            if os.path.exists(unique_filename):
-                os.remove(unique_filename)
-            if os.path.exists(processed_image_path):
-                os.remove(processed_image_path)
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+    finally:
+        # Clean up temporary files
+        if os.path.exists(unique_filename):
+            os.remove(unique_filename)
+        if os.path.exists(processed_image_path):
+            os.remove(processed_image_path)
