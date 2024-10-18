@@ -14,8 +14,10 @@ ALLOWED_EXTENSIONS = {'pdf'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/process-pdf/', methods=['POST'])
+@app.route('/process-pdf/', methods=['POST', 'GET'])
 def process_pdf():
+    if request.method == 'GET':
+        return 'GET method'
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
     file = request.files['file']
@@ -51,7 +53,7 @@ def process_pdf():
                         file_path = os.path.join(foldername, filename)
                         zip_file.write(file_path, os.path.relpath(file_path, output_folder))
 
-            return send_file(zip_file_path, as_attachment=True, attachment_filename='recognized_content.zip')
+            return send_file(zip_file_path, as_attachment=True, download_name='recognized_content.zip')
 
         except Exception as e:
             return jsonify({"error": f"An error occurred: {str(e)}"}), 500
@@ -64,4 +66,4 @@ def process_pdf():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=False)
