@@ -36,7 +36,7 @@ if uploaded_file is not None:
 
         # Call the trans.py script
         result = subprocess.run(
-            ['python', 'trans.py', '--input_file', input_file_path, '--output_folder', output_folder],
+            ['python', 'ragflow/deepdoc/vision/t_ocr.py', '--inputs', input_file_path, '--output_dir', output_folder],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
